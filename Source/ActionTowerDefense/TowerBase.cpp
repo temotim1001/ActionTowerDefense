@@ -358,3 +358,26 @@ void ATowerBase::UpgradeTower()
     Destroy();
 }
 
+void ATowerBase::SetTeam(ETowerTeam NewTeam)
+{
+    if (Team == NewTeam)
+    {
+        return;
+    }
+
+    Team = NewTeam;
+
+    // Make sure visuals (selection ring material etc.) stay in sync with team.
+    UpdateSelectionVisuals();
+}
+
+float ATowerBase::GetCaptureProgress01() const
+{
+    if (CaptureHPMax <= 0.f)
+    {
+        return 0.f;
+    }
+
+    return FMath::Clamp(CaptureHP / CaptureHPMax, 0.f, 1.f);
+}
+

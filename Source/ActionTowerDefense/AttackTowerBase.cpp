@@ -411,7 +411,7 @@ void AAttackTowerBase::SetOrderState(ETowerOrderState NewState, AActor* NewForce
     case ETowerOrderState::CaptureTower:
     {
         ATowerBase* TargetTower = Cast<ATowerBase>(ForcedOrderTarget);
-        if (TargetTower && TargetTower->Team == ETowerTeam::Neutral)
+        if (TargetTower && TargetTower->GetTeam() == ETowerTeam::Neutral)
         {
             // This is what actually starts capture:
             // ATowerBase::Tick sees AssignedCaptureTarget and drains CaptureHP.
@@ -425,8 +425,8 @@ void AAttackTowerBase::SetOrderState(ETowerOrderState NewState, AActor* NewForce
             SetCaptureTarget(nullptr);
             StopCaptureBeam();
         }
+        break;
     }
-    break;
 
     case ETowerOrderState::AttackBonus:
         // No capture for bonus items
@@ -445,7 +445,7 @@ bool AAttackTowerBase::IsCaptureOrderCompleted() const
     }
 
     // If the target is no longer neutral, someone captured/upgraded it -> done
-    if (AssignedCaptureTarget->Team != ETowerTeam::Neutral)
+    if (AssignedCaptureTarget->GetTeam() != ETowerTeam::Neutral)
     {
         return true;
     }
@@ -468,7 +468,7 @@ void AAttackTowerBase::OrderCaptureTower(ATowerBase* NeutralTower)
     if (!NeutralTower)
         return;
 
-    if (NeutralTower->Team != ETowerTeam::Neutral)
+    if (NeutralTower->GetTeam() != ETowerTeam::Neutral)
         return;
 
     SetOrderState(ETowerOrderState::CaptureTower, NeutralTower);

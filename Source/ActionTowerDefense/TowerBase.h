@@ -30,7 +30,26 @@ public:
     ATowerBase();
 
     virtual void Tick(float DeltaSeconds) override;
+
+    // --- Selection API ---
     void SetSelected(bool bNewSelected);
+
+    UFUNCTION(BlueprintPure, Category = "Selection")
+    FORCEINLINE bool IsSelected() const { return bIsSelected; }
+
+    // --- Team / ownership API ---
+
+    UFUNCTION(BlueprintPure, Category = "Tower")
+    FORCEINLINE ETowerTeam GetTeam() const { return Team; }
+
+    UFUNCTION(BlueprintCallable, Category = "Tower")
+    void SetTeam(ETowerTeam NewTeam);
+
+    // --- Capture API helpers for UI / logic ---
+
+    /** 0..1 capture progress (for UI bars etc.). */
+    UFUNCTION(BlueprintPure, Category = "Tower|Capture")
+    float GetCaptureProgress01() const;
 
 protected:
     virtual void BeginPlay() override;
@@ -119,6 +138,8 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Tower|Progression")
     virtual void UpgradeTower();
+
+
 
 protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Selection")
