@@ -1,0 +1,13 @@
+# Unreal Engine assets (binary files)
+*.uasset filter=lfs diff=lfs merge=lfs
+*.umap   filter=lfs diff=lfs merge=lfs
+
+# Common 3D/Game asset types
+*.fbx  filter=lfs diff=lfs merge=lfs
+*.png  filter=lfs diff=lfs merge=lfs
+*.jpg  filter=lfs diff=lfs merge=lfs
+*.jpeg filter=lfs diff=lfs merge=lfs
+*.tga  filter=lfs diff=lfs merge=lfs
+*.wav  filter=lfs diff=lfs merge=lfs
+*.mp3  filter=lfs diff=lfs merge=lfs
+*.mp4  filter=lfs diff=lfs merge=lfs

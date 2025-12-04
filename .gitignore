@@ -1,0 +1,79 @@
+# ---------------------------------------
+# Unreal Engine / Project
+# ---------------------------------------
+
+# Visual Studio
+.vs/
+*.VC.db
+*.VC.opendb
+*.sln
+*.suo
+*.opensdf
+*.sdf
+.vsconfig
+.idea/
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries / libs
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+*.ipa
+
+# Unreal auto-generated project files
+*.xcodeproj
+*.xcworkspace
+
+# Engine build directories
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+Build/
+
+# NOTE: Keep PakBlacklist (UE requires these)
+!Build/**/
+!Build/**/PakBlacklist*.txt
+# Keep icons
+!Build/**/*.ico
+
+# Plugin binaries/intermediates
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+
+# SourceArt imports
+SourceArt/**/*.png
+SourceArt/**/*.tga
+
+# Built Lighting Data
+*_BuiltData.uasset
+
+# Logs & temp files
+*.log
+*.tlog
+*.tmp
+*.cache
+
+# OS / Misc
+.DS_Store
+Thumbs.db
