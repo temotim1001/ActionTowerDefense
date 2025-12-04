@@ -14,9 +14,11 @@ class UNiagaraComponent;
 UENUM(BlueprintType)
 enum class ETowerOrderState : uint8
 {
-    AttackEnemies   UMETA(DisplayName = "Attack Enemies"),
-    CaptureTower    UMETA(DisplayName = "Capture Tower"),
-    AttackBonus     UMETA(DisplayName = "Attack Bonus")
+    AttackEnemies    UMETA(DisplayName = "Attack Enemies"),
+    CaptureTower     UMETA(DisplayName = "Capture Tower"),
+    AttackBonus      UMETA(DisplayName = "Attack Bonus"),
+    HoldFire         UMETA(DisplayName = "Hold Fire"),
+    Disabled         UMETA(DisplayName = "Disabled")
 };
 
 UCLASS()
@@ -26,20 +28,15 @@ class ACTIONTOWERDEFENSE_API AAttackTowerBase : public ATowerBase
 
 public:
     AAttackTowerBase();
-
     virtual void Tick(float DeltaSeconds) override;
 
     // --- Orders exposed to PlayerController / BP ---
-
-    /** Order this tower to capture the given neutral tower. */
     UFUNCTION(BlueprintCallable, Category = "Tower|Orders")
     void OrderCaptureTower(ATowerBase* NeutralTower);
 
-    /** Order this tower to attack a bonus item (not implemented yet). */
     UFUNCTION(BlueprintCallable, Category = "Tower|Orders")
     void OrderAttackBonus(AActor* BonusActor);
 
-    /** Cancel current special order and return to attacking enemies. */
     UFUNCTION(BlueprintCallable, Category = "Tower|Orders")
     void OrderStopCurrentAction();
 
@@ -72,6 +69,7 @@ protected:
     UPROPERTY()
     TWeakObjectPtr<AActor> CurrentTarget;
 
+    // --- Projectile movement ---
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Projectile")
     float ProjectileSpeed = 2000.f;
 
@@ -81,7 +79,7 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Projectile", meta = (EditCondition = "bUseHoming"))
     float ProjectileHomingAcceleration = 8000.f;
 
-    // Rotation
+    // --- Rotation ---
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Aiming")
     float RotationSpeedDegPerSec = 90.f;   // how fast the tower turns
 
@@ -91,6 +89,7 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Aiming")
     bool bUseYawOnly = true;              // ignore pitch for a flat 2D tower
 
+    // --- Orders / state ---
     /** Optional forced target for special orders (capture / bonus). */
     UPROPERTY()
     AActor* ForcedOrderTarget = nullptr;
@@ -113,33 +112,30 @@ protected:
         UPrimitiveComponent* OtherComp,
         int32 OtherBodyIndex);
 
-    // Helpers
-    void CleanupTargetQueue();
-    void SelectNextTarget();
-    void AttackTick(float DeltaSeconds);
-    void TryFire(float DeltaSeconds);
-    virtual void FireProjectile();
-
-    bool IsEnemyValid(AActor* EnemyActor) const;
-
-    // Rotation helpers
+    // ================================
+    // Internal Tick helpers
+    // ================================
+    void TickAttack(float DeltaSeconds);
+    void UpdateTargetQueue(float DeltaSeconds);
+    void UpdateOrderState(float DeltaSeconds);
     void RotateTowardsTarget(float DeltaSeconds);
+    void TickFireLogic(float DeltaSeconds);
+
+    bool HasValidTarget() const;
+    bool IsEnemyValid(AActor* EnemyActor) const;
     bool IsAimedAtTarget() const;
 
-    /** Internal helper to update state + capture/beam targets. */
+    // Order/state helpers
     void SetOrderState(ETowerOrderState NewState, AActor* NewForcedTarget);
-
-    /** Returns true when current capture order has finished. */
     bool IsCaptureOrderCompleted() const;
 
     // Tell TowerBase what our attack range is
     virtual float GetAttackRange_Implementation() const override;
 
-    /** Which Niagara system to use for the capture beam (set in BP). */
+    // --- Capture beam / VFX ---
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Capture|VFX")
     UNiagaraSystem* CaptureBeamSystem = nullptr;
 
-    /** Component that actually plays the capture beam. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Capture|VFX")
     UNiagaraComponent* CaptureBeamComponent = nullptr;
 
@@ -149,4 +145,8 @@ public:
     // For muzzle flash, sound etc.
     UFUNCTION(BlueprintImplementableEvent, Category = "Attack")
     void BP_OnAttackFired();
+
+protected:
+    // Allow child towers (e.g. Minigun) to customize the actual shot
+    virtual void FireProjectile();
 };

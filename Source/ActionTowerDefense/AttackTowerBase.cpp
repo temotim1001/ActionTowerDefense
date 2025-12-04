@@ -6,36 +6,36 @@
 #include "Projectile.h"
 #include "DamageableTarget.h"
 #include "Engine/Engine.h"
-#include "STGameState.h"
-#include "NiagaraComponent.h"        
-#include "NiagaraSystem.h" 
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
 #include "STGameSpeedHelpers.h"
+
+// ========================================================
+// Constructor / BeginPlay
+// ========================================================
 
 AAttackTowerBase::AAttackTowerBase()
 {
     PrimaryActorTick.bCanEverTick = true;
 
-    // Attachments to existing MeshComp from ATowerBase
-    
+    // Attack range collider
     AttackRangeSphere = CreateDefaultSubobject<USphereComponent>(TEXT("AttackRangeSphere"));
     AttackRangeSphere->SetupAttachment(MeshComp);
     AttackRangeSphere->SetSphereRadius(1000.f);
-
     AttackRangeSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
     AttackRangeSphere->SetGenerateOverlapEvents(true);
 
-    // Start from "ignore everything"
     AttackRangeSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
-
-    // Overlap only enemies
     AttackRangeSphere->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
 
+    // Muzzle
     MuzzlePoint = CreateDefaultSubobject<USceneComponent>(TEXT("MuzzlePoint"));
     MuzzlePoint->SetupAttachment(MeshComp);
-    MuzzlePoint->SetRelativeLocation(FVector(100.f, 0.f, 50.f)); // tweak in BP
+    MuzzlePoint->SetRelativeLocation(FVector(100.f, 0.f, 50.f));
 
+    // Capture beam
     CaptureBeamComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("CaptureBeamFX"));
-    CaptureBeamComponent->SetupAttachment(MuzzlePoint);   // beam starts at muzzle
+    CaptureBeamComponent->SetupAttachment(MuzzlePoint);
     CaptureBeamComponent->SetAutoActivate(false);
 }
 
@@ -43,7 +43,6 @@ void AAttackTowerBase::BeginPlay()
 {
     Super::BeginPlay();
 
-    // NEW: now that editor / BP values are applied, sync capture range to attack range
     if (AttackRangeSphere)
     {
         CaptureRange = AttackRangeSphere->GetScaledSphereRadius();
@@ -52,78 +51,79 @@ void AAttackTowerBase::BeginPlay()
     AttackRangeSphere->OnComponentBeginOverlap.AddDynamic(this, &AAttackTowerBase::OnAttackRangeBeginOverlap);
     AttackRangeSphere->OnComponentEndOverlap.AddDynamic(this, &AAttackTowerBase::OnAttackRangeEndOverlap);
 
-    // Assign Niagara system if set
     if (CaptureBeamComponent && CaptureBeamSystem)
     {
         CaptureBeamComponent->SetAsset(CaptureBeamSystem);
     }
 }
 
+// ========================================================
+// Tick
+// ========================================================
+
 void AAttackTowerBase::Tick(float DeltaSeconds)
 {
-    // 1) Base Tick: capture logic (TowerBase handles capture here)
+    // Base class handles capture
     Super::Tick(DeltaSeconds);
 
-    // 2) Apply global speed
     const float Speed = FSTGameSpeedHelpers::GetGameSpeed(this);
-
     if (Speed <= 0.f)
     {
-        // No firing while rewinding or paused
-        UpdateCaptureBeam(); // also ensure beam is off if needed
+        // No attacking during pause/rewind
+        UpdateCaptureBeam();
         return;
     }
 
     const float EffectiveDelta = DeltaSeconds * Speed;
-
-    // 3) Behavior based on current order
-    switch (CurrentOrderState)
-    {
-    case ETowerOrderState::AttackEnemies:
-        AttackTick(EffectiveDelta);
-        break;
-
-    case ETowerOrderState::CaptureTower:
-        // Capture is handled by ATowerBase::Tick / TickCapture
-        break;
-
-    case ETowerOrderState::AttackBonus:
-        // TODO: bonus logic later
-        break;
-    }
-
-    // 4) If capture is done, revert to attacking enemies
-    if (CurrentOrderState == ETowerOrderState::CaptureTower &&
-        IsCaptureOrderCompleted())
-    {
-        SetOrderState(ETowerOrderState::AttackEnemies, nullptr);
-    }
-
-    // 5) Update capture beam VFX
-    UpdateCaptureBeam();
+    TickAttack(EffectiveDelta);
 }
 
-// Only run capture logic when we are actually in CaptureTower state
-/* To be deleted - handled by super (Towerbase)
-void AAttackTowerBase::TickCapture(float DeltaSeconds)
+void AAttackTowerBase::TickAttack(float DeltaSeconds)
 {
-    if (CurrentOrderState == ETowerOrderState::CaptureTower)
+    UpdateCaptureBeam();
+    UpdateTargetQueue(DeltaSeconds);
+    UpdateOrderState(DeltaSeconds);
+    RotateTowardsTarget(DeltaSeconds);
+    TickFireLogic(DeltaSeconds);
+}
+
+// ========================================================
+// Target Queue / Selection
+// ========================================================
+
+void AAttackTowerBase::UpdateTargetQueue(float DeltaSeconds)
+{
+    // Remove invalid current target
+    if (CurrentTarget.IsValid() && !IsValid(CurrentTarget.Get()))
     {
-        // Run the normal capture logic from ATowerBase
-        Super::TickCapture(DeltaSeconds);
+        CurrentTarget = nullptr;
     }
-    else
+
+    // Clean queue
+    EnemyQueue.RemoveAll([](const TWeakObjectPtr<AActor>& Item)
+        {
+            return !IsValid(Item.Get());
+        });
+
+    // If no target, pick the first valid in queue
+    if (!CurrentTarget.IsValid() && EnemyQueue.Num() > 0)
     {
-        // Make sure we’re not showing a capture beam in other states
-        StopCaptureBeam();
-        // Optional: don’t clear AssignedCaptureTarget here so we can resume later if you want
+        CurrentTarget = EnemyQueue[0];
+        EnemyQueue.RemoveAt(0);
     }
 }
-*/
 
-// =======================
-// Overlap / Target queue
-// =======================
+bool AAttackTowerBase::HasValidTarget() const
+{
+    return CurrentTarget.IsValid();
+}
+
+bool AAttackTowerBase::IsEnemyValid(AActor* EnemyActor) const
+{
+    return IsValid(EnemyActor);
+}
+
+// Overlap handlers
 
 void AAttackTowerBase::OnAttackRangeBeginOverlap(
     UPrimitiveComponent* OverlappedComp,
@@ -136,7 +136,7 @@ void AAttackTowerBase::OnAttackRangeBeginOverlap(
     if (!OtherActor || OtherActor == this)
         return;
 
-    // Just in case, ignore towers
+    // Ignore towers
     if (Cast<ATowerBase>(OtherActor))
         return;
 
@@ -145,16 +145,6 @@ void AAttackTowerBase::OnAttackRangeBeginOverlap(
     if (!CurrentTarget.IsValid())
     {
         CurrentTarget = OtherActor;
-    }
-
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(
-            -1, 2.f, FColor::Green,
-            FString::Printf(TEXT("Added to queue: %s | QueueSize=%d"),
-                *GetNameSafe(OtherActor),
-                EnemyQueue.Num())
-        );
     }
 }
 
@@ -178,158 +168,136 @@ void AAttackTowerBase::OnAttackRangeEndOverlap(
     }
 }
 
-bool AAttackTowerBase::IsEnemyValid(AActor* EnemyActor) const
+// ========================================================
+// Order State
+// ========================================================
+
+void AAttackTowerBase::UpdateOrderState(float DeltaSeconds)
 {
-    // Minimal version: only check that it still exists
-    return IsValid(EnemyActor);
-
-    /*
-    if (!IsValid(EnemyActor))
-        return false;
-
-    const float DistSq = FVector::DistSquared(
-        EnemyActor->GetActorLocation(),
-        GetActorLocation()
-    );
-    const float RangeSq = FMath::Square(AttackRangeSphere->GetScaledSphereRadius());
-
-    return DistSq <= RangeSq;
-    */
-}
-
-void AAttackTowerBase::CleanupTargetQueue()
-{
-    EnemyQueue.RemoveAll([](const TWeakObjectPtr<AActor>& Item)
-        {
-            return !IsValid(Item.Get());
-        });
-
-    if (CurrentTarget.IsValid() && !IsValid(CurrentTarget.Get()))
+    switch (CurrentOrderState)
     {
-        CurrentTarget = nullptr;
-    }
-}
+    case ETowerOrderState::AttackEnemies:
+        // Normal behavior
+        break;
 
-void AAttackTowerBase::SelectNextTarget()
-{
-    for (int32 i = 0; i < EnemyQueue.Num(); ++i)
-    {
-        AActor* EnemyActor = EnemyQueue[i].Get();
-        if (IsEnemyValid(EnemyActor))
+    case ETowerOrderState::HoldFire:
+        // Skip fire logic
+        return;
+
+    case ETowerOrderState::CaptureTower:
+        if (IsCaptureOrderCompleted())
         {
-            CurrentTarget = EnemyActor; // first valid in list = first seen
+            SetOrderState(ETowerOrderState::AttackEnemies, nullptr);
             return;
         }
-    }
+        break;
 
-    CurrentTarget = nullptr;
-}
+    case ETowerOrderState::AttackBonus:
+        // TODO: bonus logic
+        break;
 
-// =======================
-// Firing
-// =======================
-
-void AAttackTowerBase::AttackTick(float DeltaSeconds)
-{
-    CleanupTargetQueue();
-
-    if (!CurrentTarget.IsValid() && EnemyQueue.Num() > 0)
-    {
-        CurrentTarget = EnemyQueue[0];
-    }
-
-    if (CurrentTarget.IsValid())
-    {
-        RotateTowardsTarget(DeltaSeconds);
-    }
-
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(
-            -1, 0.f, FColor::Cyan,
-            FString::Printf(TEXT("CurrentTarget: %s | Queue: %d"),
-                *GetNameSafe(CurrentTarget.Get()),
-                EnemyQueue.Num())
-        );
-    }
-
-    TryFire(DeltaSeconds);
-}
-
-void AAttackTowerBase::TryFire(float DeltaSeconds)
-{
-    if (!CurrentTarget.IsValid())
+    case ETowerOrderState::Disabled:
         return;
 
-    if (!IsAimedAtTarget())
-        return; // not lined up yet
+    default:
+        break;
+    }
+}
 
-    if (!ProjectileClass)
+void AAttackTowerBase::SetOrderState(ETowerOrderState NewState, AActor* NewForcedTarget)
+{
+    CurrentOrderState = NewState;
+    ForcedOrderTarget = NewForcedTarget;
+
+    switch (CurrentOrderState)
     {
-        if (GEngine)
+    case ETowerOrderState::AttackEnemies:
+        SetCaptureTarget(nullptr);
+        StopCaptureBeam();
+        break;
+
+    case ETowerOrderState::CaptureTower:
+    {
+        ATowerBase* TargetTower = Cast<ATowerBase>(ForcedOrderTarget);
+        if (TargetTower && TargetTower->GetTeam() == ETowerTeam::Neutral)
         {
-            GEngine->AddOnScreenDebugMessage(
-                -1, 1.f, FColor::Red,
-                TEXT("No ProjectileClass set on tower!")
-            );
+            SetCaptureTarget(TargetTower);
         }
-        return;
+        else
+        {
+            CurrentOrderState = ETowerOrderState::AttackEnemies;
+            ForcedOrderTarget = nullptr;
+            SetCaptureTarget(nullptr);
+            StopCaptureBeam();
+        }
+        break;
     }
 
-    FireCooldown -= DeltaSeconds;
-    if (FireCooldown > 0.f)
-        return;
+    case ETowerOrderState::AttackBonus:
+        SetCaptureTarget(nullptr);
+        StopCaptureBeam();
+        break;
 
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(
-            -1, 1.f, FColor::Yellow,
-            TEXT("TryFire → calling FireProjectile"));
+    case ETowerOrderState::HoldFire:
+    case ETowerOrderState::Disabled:
+        SetCaptureTarget(nullptr);
+        StopCaptureBeam();
+        break;
+
+    default:
+        break;
     }
-
-    FireProjectile();
-
-    FireCooldown = (FireRate > 0.f) ? (1.f / FireRate) : 0.f;
 }
 
-void AAttackTowerBase::FireProjectile()
+bool AAttackTowerBase::IsCaptureOrderCompleted() const
 {
-    if (!CurrentTarget.IsValid() || !ProjectileClass)
-        return;
-
-    const FVector SpawnLocation = MuzzlePoint->GetComponentLocation();
-    const FVector TargetLocation = CurrentTarget->GetActorLocation();
-    const FRotator SpawnRotation = (TargetLocation - SpawnLocation).Rotation();
-
-    FActorSpawnParameters Params;
-    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-    Params.Owner = this;
-    Params.Instigator = GetInstigator();
-
-    AProjectile* Projectile = GetWorld()->SpawnActor<AProjectile>(
-        ProjectileClass,
-        SpawnLocation,
-        SpawnRotation,
-        Params
-    );
-
-    if (Projectile)
+    if (!AssignedCaptureTarget || !IsValid(AssignedCaptureTarget))
     {
-        Projectile->InitProjectile(
-            CurrentTarget.Get(),
-            ProjectileDamage,
-            ProjectileSpeed,
-            bUseHoming,
-            ProjectileHomingAcceleration
-        );
-
-        BP_OnAttackFired(); // let BP handle muzzle flash / sound / animation
+        return true;
     }
+
+    if (AssignedCaptureTarget->GetTeam() != ETowerTeam::Neutral)
+    {
+        return true;
+    }
+
+    if (!IsValidCaptureTarget(AssignedCaptureTarget))
+    {
+        return true;
+    }
+
+    return false;
 }
 
-// =======================
-// Rotation helpers
-// =======================
+// Public order API
+
+void AAttackTowerBase::OrderCaptureTower(ATowerBase* NeutralTower)
+{
+    if (!NeutralTower)
+        return;
+
+    if (NeutralTower->GetTeam() != ETowerTeam::Neutral)
+        return;
+
+    SetOrderState(ETowerOrderState::CaptureTower, NeutralTower);
+}
+
+void AAttackTowerBase::OrderAttackBonus(AActor* BonusActor)
+{
+    if (!BonusActor)
+        return;
+
+    SetOrderState(ETowerOrderState::AttackBonus, BonusActor);
+}
+
+void AAttackTowerBase::OrderStopCurrentAction()
+{
+    SetOrderState(ETowerOrderState::AttackEnemies, nullptr);
+}
+
+// ========================================================
+// Rotation / Aiming
+// ========================================================
 
 void AAttackTowerBase::RotateTowardsTarget(float DeltaSeconds)
 {
@@ -340,7 +308,7 @@ void AAttackTowerBase::RotateTowardsTarget(float DeltaSeconds)
 
     if (bUseYawOnly)
     {
-        ToTarget.Z = 0.f; // flat rotation
+        ToTarget.Z = 0.f;
     }
 
     if (ToTarget.IsNearlyZero())
@@ -391,109 +359,70 @@ bool AAttackTowerBase::IsAimedAtTarget() const
     return AngleDeg <= AimToleranceDeg;
 }
 
-// =======================
-// Order/state helpers
-// =======================
+// ========================================================
+// Firing
+// ========================================================
 
-void AAttackTowerBase::SetOrderState(ETowerOrderState NewState, AActor* NewForcedTarget)
+void AAttackTowerBase::TickFireLogic(float DeltaSeconds)
 {
-    CurrentOrderState = NewState;
-    ForcedOrderTarget = NewForcedTarget;
-
-    switch (CurrentOrderState)
+    if (CurrentOrderState == ETowerOrderState::HoldFire ||
+        CurrentOrderState == ETowerOrderState::Disabled)
     {
-    case ETowerOrderState::AttackEnemies:
-        // Cancel any capture and stop the beam
-        SetCaptureTarget(nullptr);   // ATowerBase API
-        StopCaptureBeam();           // ATowerBase helper
-        break;
-
-    case ETowerOrderState::CaptureTower:
-    {
-        ATowerBase* TargetTower = Cast<ATowerBase>(ForcedOrderTarget);
-        if (TargetTower && TargetTower->GetTeam() == ETowerTeam::Neutral)
-        {
-            // This is what actually starts capture:
-            // ATowerBase::Tick sees AssignedCaptureTarget and drains CaptureHP.
-            SetCaptureTarget(TargetTower);
-        }
-        else
-        {
-            // Invalid target -> revert safely
-            CurrentOrderState = ETowerOrderState::AttackEnemies;
-            ForcedOrderTarget = nullptr;
-            SetCaptureTarget(nullptr);
-            StopCaptureBeam();
-        }
-        break;
+        return;
     }
 
-    case ETowerOrderState::AttackBonus:
-        // No capture for bonus items
-        SetCaptureTarget(nullptr);
-        StopCaptureBeam();
-        break;
-    }
-}
-
-bool AAttackTowerBase::IsCaptureOrderCompleted() const
-{
-    // If pointer is null or actor already destroyed, we're done
-    if (!AssignedCaptureTarget || !IsValid(AssignedCaptureTarget))
-    {
-        return true;
-    }
-
-    // If the target is no longer neutral, someone captured/upgraded it -> done
-    if (AssignedCaptureTarget->GetTeam() != ETowerTeam::Neutral)
-    {
-        return true;
-    }
-
-    // If it's not a valid capture target (too far etc.), also done
-    if (!IsValidCaptureTarget(AssignedCaptureTarget))
-    {
-        return true;
-    }
-
-    return false;
-}
-
-// =======================
-// Public order API
-// =======================
-
-void AAttackTowerBase::OrderCaptureTower(ATowerBase* NeutralTower)
-{
-    if (!NeutralTower)
+    if (!HasValidTarget())
         return;
 
-    if (NeutralTower->GetTeam() != ETowerTeam::Neutral)
+    if (!IsAimedAtTarget())
         return;
 
-    SetOrderState(ETowerOrderState::CaptureTower, NeutralTower);
-}
-
-void AAttackTowerBase::OrderAttackBonus(AActor* BonusActor)
-{
-    if (!BonusActor)
+    FireCooldown -= DeltaSeconds;
+    if (FireCooldown > 0.f)
         return;
 
-    // TODO: later implement proper bonus-targeting logic
-    SetOrderState(ETowerOrderState::AttackBonus, BonusActor);
+    FireProjectile();
+    FireCooldown = (FireRate > 0.f) ? (1.f / FireRate) : 0.f;
 }
 
-
-void AAttackTowerBase::OrderStopCurrentAction()
+void AAttackTowerBase::FireProjectile()
 {
-    SetOrderState(ETowerOrderState::AttackEnemies, nullptr);
+    if (!CurrentTarget.IsValid() || !ProjectileClass)
+        return;
+
+    const FVector SpawnLoc = MuzzlePoint->GetComponentLocation();
+    const FVector TargetLoc = CurrentTarget->GetActorLocation();
+    const FRotator SpawnRot = (TargetLoc - SpawnLoc).Rotation();
+
+    FActorSpawnParameters Params;
+    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+    Params.Owner = this;
+    Params.Instigator = GetInstigator();
+
+    AProjectile* Projectile = GetWorld()->SpawnActor<AProjectile>(
+        ProjectileClass,
+        SpawnLoc,
+        SpawnRot,
+        Params
+    );
+
+    if (Projectile)
+    {
+        Projectile->InitProjectile(
+            CurrentTarget.Get(),
+            ProjectileDamage,
+            ProjectileSpeed,
+            bUseHoming,
+            ProjectileHomingAcceleration
+        );
+
+        BP_OnAttackFired();
+    }
 }
 
-float AAttackTowerBase::GetAttackRange_Implementation() const
-{
-    // Use the actual collision sphere radius as attack range
-    return AttackRangeSphere ? AttackRangeSphere->GetScaledSphereRadius() : 0.f;
-}
+// ========================================================
+// Capture Beam
+// ========================================================
 
 void AAttackTowerBase::UpdateCaptureBeam()
 {
@@ -528,4 +457,13 @@ void AAttackTowerBase::UpdateCaptureBeam()
             CaptureBeamComponent->Deactivate();
         }
     }
+}
+
+// ========================================================
+// TowerBase overrides
+// ========================================================
+
+float AAttackTowerBase::GetAttackRange_Implementation() const
+{
+    return AttackRangeSphere ? AttackRangeSphere->GetScaledSphereRadius() : 0.f;
 }
