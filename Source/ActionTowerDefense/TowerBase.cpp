@@ -6,6 +6,7 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/Engine.h"
 #include "STGameState.h"
+#include "STGameSpeedHelpers.h"
 
 ATowerBase::ATowerBase()
 {
@@ -57,13 +58,7 @@ void ATowerBase::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
 
     // Apply global game speed to capture logic
-    float EffectiveDelta = DeltaSeconds;
-
-    float Speed = 1.f;
-    if (ASTGameState* GS = ASTGameState::Get(this))
-    {
-        Speed = GS->GetCurrentSpeed();  // -3, 1, 3, 5
-    }
+    const float Speed = FSTGameSpeedHelpers::GetGameSpeed(this);
 
     // Rule: no capture progress while rewinding or paused
     if (Speed <= 0.f)
@@ -72,7 +67,7 @@ void ATowerBase::Tick(float DeltaSeconds)
         return;
     }
 
-    EffectiveDelta *= Speed; // 1x / 3x / 5x
+    const float EffectiveDelta = DeltaSeconds * Speed; // 1x / 3x / 5x
 
     TickCapture(EffectiveDelta);
 }

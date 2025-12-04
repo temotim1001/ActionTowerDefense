@@ -7,7 +7,7 @@
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "DamageableTarget.h"
 #include "STGameState.h"
- 
+#include "STGameSpeedHelpers.h" 
 
 
 AProjectile::AProjectile()
@@ -131,11 +131,7 @@ void AProjectile::Tick(float DeltaSeconds)
         return;
     }
 
-    float Speed = 1.f;
-    if (ASTGameState* GS = ASTGameState::Get(this))
-    {
-        Speed = GS->GetCurrentSpeed();   // -3, 1, 3, 5
-    }
+    const float Speed = FSTGameSpeedHelpers::GetGameSpeed(this);
 
     if (FMath::IsNearlyZero(Speed))
     {

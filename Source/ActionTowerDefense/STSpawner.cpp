@@ -5,7 +5,8 @@
 #include "Engine/World.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "STGameState.h"
-#include "STGameController.h" 
+#include "STGameController.h"
+#include "STGameSpeedHelpers.h"
 
 ASTSpawner::ASTSpawner()
 {
@@ -34,13 +35,8 @@ void ASTSpawner::Tick(float DeltaTime)
 
     // Read global speed from GameController
     // Read global speed from GameState
-    float Speed = 1.f;
-    if (ASTGameState* GS = ASTGameState::Get(this))
-    {
-        Speed = GS->GetCurrentSpeed();   // -3, 1, 3, 5
-    }
-
-    const float PositiveSpeed = (Speed > 0.f) ? Speed : 0.f;
+    const float Speed = FSTGameSpeedHelpers::GetGameSpeed(this);
+    const float PositiveSpeed = FSTGameSpeedHelpers::GetPositiveSpeed(this);
 
     // --- PHASE 1: waiting for next wave to start ---
     if (!bWaveRunning)

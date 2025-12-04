@@ -9,6 +9,7 @@
 #include "STGameState.h"
 #include "NiagaraComponent.h"        
 #include "NiagaraSystem.h" 
+#include "STGameSpeedHelpers.h"
 
 AAttackTowerBase::AAttackTowerBase()
 {
@@ -64,13 +65,7 @@ void AAttackTowerBase::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
 
     // 2) Apply global speed
-    float EffectiveDelta = DeltaSeconds;
-
-    float Speed = 1.f;
-    if (ASTGameState* GS = ASTGameState::Get(this))
-    {
-        Speed = GS->GetCurrentSpeed();
-    }
+    const float Speed = FSTGameSpeedHelpers::GetGameSpeed(this);
 
     if (Speed <= 0.f)
     {
@@ -79,7 +74,7 @@ void AAttackTowerBase::Tick(float DeltaSeconds)
         return;
     }
 
-    EffectiveDelta *= Speed;
+    const float EffectiveDelta = DeltaSeconds * Speed;
 
     // 3) Behavior based on current order
     switch (CurrentOrderState)
