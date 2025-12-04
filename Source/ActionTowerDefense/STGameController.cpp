@@ -50,6 +50,10 @@ void ASTGameController::BeginPlay()
 
         SpawnerRef->OnNextWaveScheduled.AddDynamic(
             this, &ASTGameController::HandleNextWaveScheduled);
+
+        // NEW: update enemies-alive count based on spawner event
+        SpawnerRef->OnEnemySpawned.AddDynamic(
+            this, &ASTGameController::HandleEnemySpawned);
     }
 
     // Initial HUD values
@@ -256,6 +260,12 @@ void ASTGameController::HandleNextWaveScheduled(float TimeUntilNextWave)
     {
         STGameStateRef->TimeToNextWave = TimeUntilNextWave;
     }
+}
+
+void ASTGameController::HandleEnemySpawned(AActor* SpawnedEnemy)
+{
+    // We don’t care which enemy it is here – just count it.
+    NotifyEnemySpawned();
 }
 
 void ASTGameController::ApplyReverseScoreCost(float DeltaSeconds)

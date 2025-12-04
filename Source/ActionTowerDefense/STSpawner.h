@@ -11,6 +11,9 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWaveStarted, int32, WaveIndex, int32, TotalWaves);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNextWaveScheduled, float, TimeUntilNextWave);
 
+// NEW: fired whenever an enemy is spawned
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemySpawned, AActor*, EnemyActor);
+
 // Internal runtime state per lane (not exposed to Blueprint)
 USTRUCT()
 struct FSTLaneRuntimeState
@@ -34,6 +37,10 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnNextWaveScheduled OnNextWaveScheduled;
+
+    // NEW: enemy spawn event – GameController / HUD can listen here
+    UPROPERTY(BlueprintAssignable, Category = "Events")
+    FOnEnemySpawned OnEnemySpawned;
 
     UFUNCTION(BlueprintCallable, Category = "Spawner")
     void RequestNextWaveNow();

@@ -4,8 +4,6 @@
 #include "STSpawner.h"
 #include "Engine/World.h"
 #include "Kismet/KismetMathLibrary.h"
-#include "STGameState.h"
-#include "STGameController.h"
 #include "STGameSpeedHelpers.h"
 
 ASTSpawner::ASTSpawner()
@@ -231,11 +229,8 @@ AActor* ASTSpawner::SpawnEnemy_Implementation(const FSTSpawnLane& Lane, int32 La
 
     if (Spawned)
     {
-        // 🔹 NEW: tell the GameController an enemy was spawned (pure C++)
-        if (ASTGameController* GC = ASTGameController::Get(this))
-        {
-            GC->NotifyEnemySpawned();
-        }
+        // NEW: let listeners (GameController, HUD, etc.) react to the spawn
+        OnEnemySpawned.Broadcast(Spawned);
 
         if (bLogSpawns)
         {

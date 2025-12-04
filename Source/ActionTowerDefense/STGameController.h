@@ -38,6 +38,10 @@ protected:
     UFUNCTION()
     void HandleNextWaveScheduled(float TimeUntilNextWave);
 
+    // NEW: handler for enemy spawn event from spawner
+    UFUNCTION()
+    void HandleEnemySpawned(AActor* SpawnedEnemy);
+
 public:
     UPROPERTY(BlueprintReadOnly, Category = "Refs")
     ASTGameState* STGameStateRef = nullptr;
