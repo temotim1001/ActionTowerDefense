@@ -45,4 +45,13 @@ public:
 
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
+
+    // --- Convenience accessors for game speed ---
+
+    UFUNCTION(BlueprintPure, Category = "Game Speed")
+    FORCEINLINE float GetCurrentSpeed() const { return CurrentSpeed; }
+
+    // Convenience helper so other classes can find the game state
+    UFUNCTION(BlueprintPure, Category = "Game", meta = (WorldContext = "WorldContextObject", DisplayName = "Get STGameState"))
+    static ASTGameState* Get(const UObject* WorldContextObject);
 };

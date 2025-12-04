@@ -6,7 +6,7 @@
 #include "Projectile.h"
 #include "DamageableTarget.h"
 #include "Engine/Engine.h"
-#include "STGameController.h"
+#include "STGameState.h"
 #include "NiagaraComponent.h"        
 #include "NiagaraSystem.h" 
 
@@ -66,18 +66,20 @@ void AAttackTowerBase::Tick(float DeltaSeconds)
     // 2) Apply global speed
     float EffectiveDelta = DeltaSeconds;
 
-    if (ASTGameController* GC = ASTGameController::Get(this))
+    float Speed = 1.f;
+    if (ASTGameState* GS = ASTGameState::Get(this))
     {
-        const float Speed = GC->GetGameSpeed();
-        if (Speed <= 0.f)
-        {
-            // No firing while rewinding or paused
-            UpdateCaptureBeam(); // also ensure beam is off if needed
-            return;
-        }
-
-        EffectiveDelta *= Speed;
+        Speed = GS->GetCurrentSpeed();
     }
+
+    if (Speed <= 0.f)
+    {
+        // No firing while rewinding or paused
+        UpdateCaptureBeam(); // also ensure beam is off if needed
+        return;
+    }
+
+    EffectiveDelta *= Speed;
 
     // 3) Behavior based on current order
     switch (CurrentOrderState)

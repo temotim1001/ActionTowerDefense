@@ -4,7 +4,8 @@
 #include "STSpawner.h"
 #include "Engine/World.h"
 #include "Kismet/KismetMathLibrary.h"
-#include "STGameController.h"
+#include "STGameState.h"
+#include "STGameController.h" 
 
 ASTSpawner::ASTSpawner()
 {
@@ -32,10 +33,11 @@ void ASTSpawner::Tick(float DeltaTime)
     }
 
     // Read global speed from GameController
+    // Read global speed from GameState
     float Speed = 1.f;
-    if (ASTGameController* GC = ASTGameController::Get(this))
+    if (ASTGameState* GS = ASTGameState::Get(this))
     {
-        Speed = GC->GetGameSpeed();   // -3, 1, 3, 5
+        Speed = GS->GetCurrentSpeed();   // -3, 1, 3, 5
     }
 
     const float PositiveSpeed = (Speed > 0.f) ? Speed : 0.f;

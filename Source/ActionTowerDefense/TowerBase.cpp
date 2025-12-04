@@ -5,7 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/Engine.h"
-#include "STGameController.h" 
+#include "STGameState.h"
 
 ATowerBase::ATowerBase()
 {
@@ -59,19 +59,20 @@ void ATowerBase::Tick(float DeltaSeconds)
     // Apply global game speed to capture logic
     float EffectiveDelta = DeltaSeconds;
 
-    if (ASTGameController* GC = ASTGameController::Get(this))
+    float Speed = 1.f;
+    if (ASTGameState* GS = ASTGameState::Get(this))
     {
-        const float Speed = GC->GetGameSpeed();  // -3, 1, 3, 5
-
-        // Rule: no capture progress while rewinding or paused
-        if (Speed <= 0.f)
-        {
-            StopCaptureBeam();   // make sure beam visuals are off
-            return;
-        }
-
-        EffectiveDelta *= Speed; // 1x / 3x / 5x
+        Speed = GS->GetCurrentSpeed();  // -3, 1, 3, 5
     }
+
+    // Rule: no capture progress while rewinding or paused
+    if (Speed <= 0.f)
+    {
+        StopCaptureBeam();   // make sure beam visuals are off
+        return;
+    }
+
+    EffectiveDelta *= Speed; // 1x / 3x / 5x
 
     TickCapture(EffectiveDelta);
 }

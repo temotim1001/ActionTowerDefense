@@ -6,7 +6,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "DamageableTarget.h"
-#include "STGameController.h" 
+#include "STGameState.h"
+ 
 
 
 AProjectile::AProjectile()
@@ -131,9 +132,9 @@ void AProjectile::Tick(float DeltaSeconds)
     }
 
     float Speed = 1.f;
-    if (ASTGameController* GC = ASTGameController::Get(this))
+    if (ASTGameState* GS = ASTGameState::Get(this))
     {
-        Speed = GC->GetGameSpeed();   // -3, 1, 3, 5
+        Speed = GS->GetCurrentSpeed();   // -3, 1, 3, 5
     }
 
     if (FMath::IsNearlyZero(Speed))

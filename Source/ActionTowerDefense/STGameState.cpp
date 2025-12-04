@@ -25,3 +25,19 @@ void ASTGameState::Tick(float DeltaSeconds)
     // Do NOT modify TimeToNextWave here anymore
 }
 
+ASTGameState* ASTGameState::Get(const UObject* WorldContextObject)
+{
+    if (!WorldContextObject)
+    {
+        return nullptr;
+    }
+
+    UWorld* World = WorldContextObject->GetWorld();
+    if (!World)
+    {
+        return nullptr;
+    }
+
+    return World->GetGameState<ASTGameState>();
+}
+
