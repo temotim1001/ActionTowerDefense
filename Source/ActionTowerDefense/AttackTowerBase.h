@@ -42,6 +42,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Tower|Orders")
     void OrderStopCurrentAction();
 
+    UFUNCTION(BlueprintCallable, Category = "Attack")
+    void SetFireRate(float InFireRate);
+
 protected:
     virtual void BeginPlay() override;
 
@@ -62,18 +65,7 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack")
     TSubclassOf<AProjectile> ProjectileClass;
 
-    float FireCooldown = 0.f;
-
-    // First-seen-first-out target queue
-    // Removed as part of refactoring of tower setup
-    // To be deleted on new logic confirmed to work
-    //UPROPERTY()
-    //TArray<TWeakObjectPtr<AActor>> EnemyQueue;
-
-    // Removed as part of refactoring of tower setup
-    // To be deleted on new logic confirmed to work
-    //UPROPERTY()
-    //TWeakObjectPtr<AActor> CurrentTarget;
+    void ApplyFireRateToAttackComponent();
 
     // --- Projectile movement ---
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Projectile")
@@ -122,16 +114,8 @@ protected:
     // Internal Tick helpers
     // ================================
     void TickAttack(float DeltaSeconds);
-    
-    // To do - delete as part of refactoring upon confirmation of new logic works
-    //void UpdateTargetQueue(float DeltaSeconds);
-    //bool HasValidTarget() const;
-    //bool IsEnemyValid(AActor* EnemyActor) const;
-    //void TickFireLogic(float DeltaSeconds);
-    
     void UpdateOrderState(float DeltaSeconds);
-    void RotateTowardsTarget(float DeltaSeconds);
-        
+    void RotateTowardsTarget(float DeltaSeconds);   
     bool IsAimedAtTarget() const;
 
     // Order/state helpers

@@ -62,14 +62,14 @@ void AAttackTowerBase::BeginPlay()
         CaptureBeamComponent->SetAsset(CaptureBeamSystem);
     }
 
+    // NEW: wire attack component and sync fire rate
     if (AttackComponent)
     {
-        // Keep FireRate as the "source of truth" on the tower
-        AttackComponent->FireRate = FireRate;
-
         AttackComponent->OnTowerReadyToFire.AddDynamic(
             this,
             &AAttackTowerBase::HandleAttackReadyToFire);
+
+        ApplyFireRateToAttackComponent();
     }
 }
 
@@ -456,4 +456,19 @@ void AAttackTowerBase::UpdateCaptureBeam()
 float AAttackTowerBase::GetAttackRange_Implementation() const
 {
     return AttackRangeSphere ? AttackRangeSphere->GetScaledSphereRadius() : 0.f;
+}
+
+// Runtime adjustments
+void AAttackTowerBase::ApplyFireRateToAttackComponent()
+{
+    if (AttackComponent)
+    {
+        AttackComponent->FireRate = FireRate;
+    }
+}
+
+void AAttackTowerBase::SetFireRate(float InFireRate)
+{
+    FireRate = InFireRate;
+    ApplyFireRateToAttackComponent();
 }
