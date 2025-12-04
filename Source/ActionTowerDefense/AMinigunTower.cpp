@@ -4,8 +4,7 @@
 #include "AMinigunTower.h"
 #include "Components/SceneComponent.h"
 #include "Projectile.h"
-
-// If MeshComp is declared in TowerBase, AttackTowerBase already sets it up. :contentReference[oaicite:1]{index=1}
+#include "TowerAttackComponent.h" 
 
 AMinigunTower::AMinigunTower()
 {
@@ -40,7 +39,11 @@ USceneComponent* AMinigunTower::GetCurrentMuzzleComponent() const
 
 void AMinigunTower::FireProjectile()
 {
-    if (!CurrentTarget.IsValid() || !ProjectileClass)
+    if (!AttackComponent || !ProjectileClass)
+        return;
+
+    AActor* Target = AttackComponent->GetCurrentTarget();
+    if (!Target)
         return;
 
     USceneComponent* Muzzle = GetCurrentMuzzleComponent();
@@ -51,7 +54,7 @@ void AMinigunTower::FireProjectile()
             ? MuzzlePoint->GetComponentLocation()
             : GetActorLocation();
 
-        const FVector TargetLocation = CurrentTarget->GetActorLocation();
+        const FVector TargetLocation = Target->GetActorLocation();
         const FRotator FallbackRotation = (TargetLocation - FallbackLocation).Rotation();
 
         FActorSpawnParameters Params;
@@ -69,7 +72,7 @@ void AMinigunTower::FireProjectile()
         if (Projectile)
         {
             Projectile->InitProjectile(
-                CurrentTarget.Get(),
+                Target,
                 ProjectileDamage,
                 ProjectileSpeed,
                 bUseHoming,
@@ -83,7 +86,7 @@ void AMinigunTower::FireProjectile()
     }
 
     const FVector SpawnLocation = Muzzle->GetComponentLocation();
-    const FVector TargetLocation = CurrentTarget->GetActorLocation();
+    const FVector TargetLocation = Target->GetActorLocation();
     const FRotator SpawnRotation = (TargetLocation - SpawnLocation).Rotation();
 
     FActorSpawnParameters Params;
@@ -101,7 +104,7 @@ void AMinigunTower::FireProjectile()
     if (Projectile)
     {
         Projectile->InitProjectile(
-            CurrentTarget.Get(),
+            Target,
             ProjectileDamage,
             ProjectileSpeed,
             bUseHoming,

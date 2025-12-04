@@ -9,6 +9,7 @@
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "STGameSpeedHelpers.h"
+#include "TowerAttackComponent.h"
 
 // ========================================================
 // Constructor / BeginPlay
@@ -37,6 +38,9 @@ AAttackTowerBase::AAttackTowerBase()
     CaptureBeamComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("CaptureBeamFX"));
     CaptureBeamComponent->SetupAttachment(MuzzlePoint);
     CaptureBeamComponent->SetAutoActivate(false);
+
+    // Attack logic component
+    AttackComponent = CreateDefaultSubobject<UTowerAttackComponent>(TEXT("AttackComponent"));
 }
 
 void AAttackTowerBase::BeginPlay()
@@ -48,12 +52,24 @@ void AAttackTowerBase::BeginPlay()
         CaptureRange = AttackRangeSphere->GetScaledSphereRadius();
     }
 
-    AttackRangeSphere->OnComponentBeginOverlap.AddDynamic(this, &AAttackTowerBase::OnAttackRangeBeginOverlap);
-    AttackRangeSphere->OnComponentEndOverlap.AddDynamic(this, &AAttackTowerBase::OnAttackRangeEndOverlap);
+    AttackRangeSphere->OnComponentBeginOverlap.AddDynamic(
+        this, &AAttackTowerBase::OnAttackRangeBeginOverlap);
+    AttackRangeSphere->OnComponentEndOverlap.AddDynamic(
+        this, &AAttackTowerBase::OnAttackRangeEndOverlap);
 
     if (CaptureBeamComponent && CaptureBeamSystem)
     {
         CaptureBeamComponent->SetAsset(CaptureBeamSystem);
+    }
+
+    if (AttackComponent)
+    {
+        // Keep FireRate as the "source of truth" on the tower
+        AttackComponent->FireRate = FireRate;
+
+        AttackComponent->OnTowerReadyToFire.AddDynamic(
+            this,
+            &AAttackTowerBase::HandleAttackReadyToFire);
     }
 }
 
@@ -81,49 +97,31 @@ void AAttackTowerBase::Tick(float DeltaSeconds)
 void AAttackTowerBase::TickAttack(float DeltaSeconds)
 {
     UpdateCaptureBeam();
-    UpdateTargetQueue(DeltaSeconds);
     UpdateOrderState(DeltaSeconds);
+
+    if (!AttackComponent)
+    {
+        return;
+    }
+
+    // Rotate towards current target
     RotateTowardsTarget(DeltaSeconds);
-    TickFireLogic(DeltaSeconds);
+
+    const bool bIsAimed = IsAimedAtTarget();
+
+    const bool bOrderAllowsFire =
+        (CurrentOrderState != ETowerOrderState::HoldFire) &&
+        (CurrentOrderState != ETowerOrderState::Disabled);
+
+    const bool bCanFireNow = bOrderAllowsFire && bIsAimed;
+
+    // Component does queue + cooldown + "ready to fire" event
+    AttackComponent->TickAttack(DeltaSeconds, bCanFireNow);
 }
 
 // ========================================================
-// Target Queue / Selection
+// Target handling: overlaps → component queue
 // ========================================================
-
-void AAttackTowerBase::UpdateTargetQueue(float DeltaSeconds)
-{
-    // Remove invalid current target
-    if (CurrentTarget.IsValid() && !IsValid(CurrentTarget.Get()))
-    {
-        CurrentTarget = nullptr;
-    }
-
-    // Clean queue
-    EnemyQueue.RemoveAll([](const TWeakObjectPtr<AActor>& Item)
-        {
-            return !IsValid(Item.Get());
-        });
-
-    // If no target, pick the first valid in queue
-    if (!CurrentTarget.IsValid() && EnemyQueue.Num() > 0)
-    {
-        CurrentTarget = EnemyQueue[0];
-        EnemyQueue.RemoveAt(0);
-    }
-}
-
-bool AAttackTowerBase::HasValidTarget() const
-{
-    return CurrentTarget.IsValid();
-}
-
-bool AAttackTowerBase::IsEnemyValid(AActor* EnemyActor) const
-{
-    return IsValid(EnemyActor);
-}
-
-// Overlap handlers
 
 void AAttackTowerBase::OnAttackRangeBeginOverlap(
     UPrimitiveComponent* OverlappedComp,
@@ -133,6 +131,9 @@ void AAttackTowerBase::OnAttackRangeBeginOverlap(
     bool bFromSweep,
     const FHitResult& SweepResult)
 {
+    if (!AttackComponent)
+        return;
+
     if (!OtherActor || OtherActor == this)
         return;
 
@@ -140,12 +141,7 @@ void AAttackTowerBase::OnAttackRangeBeginOverlap(
     if (Cast<ATowerBase>(OtherActor))
         return;
 
-    EnemyQueue.AddUnique(OtherActor);
-
-    if (!CurrentTarget.IsValid())
-    {
-        CurrentTarget = OtherActor;
-    }
+    AttackComponent->AddTarget(OtherActor);
 }
 
 void AAttackTowerBase::OnAttackRangeEndOverlap(
@@ -154,18 +150,13 @@ void AAttackTowerBase::OnAttackRangeEndOverlap(
     UPrimitiveComponent* OtherComp,
     int32 OtherBodyIndex)
 {
+    if (!AttackComponent)
+        return;
+
     if (!OtherActor)
         return;
 
-    EnemyQueue.RemoveAll([OtherActor](const TWeakObjectPtr<AActor>& Item)
-        {
-            return Item.Get() == OtherActor;
-        });
-
-    if (CurrentTarget.Get() == OtherActor)
-    {
-        CurrentTarget = nullptr;
-    }
+    AttackComponent->RemoveTarget(OtherActor);
 }
 
 // ========================================================
@@ -301,10 +292,14 @@ void AAttackTowerBase::OrderStopCurrentAction()
 
 void AAttackTowerBase::RotateTowardsTarget(float DeltaSeconds)
 {
-    if (!CurrentTarget.IsValid())
+    if (!AttackComponent)
         return;
 
-    FVector ToTarget = CurrentTarget->GetActorLocation() - GetActorLocation();
+    AActor* Target = AttackComponent->GetCurrentTarget();
+    if (!Target)
+        return;
+
+    FVector ToTarget = Target->GetActorLocation() - GetActorLocation();
 
     if (bUseYawOnly)
     {
@@ -335,11 +330,15 @@ void AAttackTowerBase::RotateTowardsTarget(float DeltaSeconds)
 
 bool AAttackTowerBase::IsAimedAtTarget() const
 {
-    if (!CurrentTarget.IsValid())
+    if (!AttackComponent)
+        return false;
+
+    AActor* Target = AttackComponent->GetCurrentTarget();
+    if (!Target)
         return false;
 
     FVector Forward = GetActorForwardVector();
-    FVector ToTarget = CurrentTarget->GetActorLocation() - GetActorLocation();
+    FVector ToTarget = Target->GetActorLocation() - GetActorLocation();
 
     if (bUseYawOnly)
     {
@@ -360,38 +359,29 @@ bool AAttackTowerBase::IsAimedAtTarget() const
 }
 
 // ========================================================
-// Firing
+// Firing hook
 // ========================================================
 
-void AAttackTowerBase::TickFireLogic(float DeltaSeconds)
+void AAttackTowerBase::HandleAttackReadyToFire()
 {
-    if (CurrentOrderState == ETowerOrderState::HoldFire ||
-        CurrentOrderState == ETowerOrderState::Disabled)
-    {
-        return;
-    }
-
-    if (!HasValidTarget())
-        return;
-
-    if (!IsAimedAtTarget())
-        return;
-
-    FireCooldown -= DeltaSeconds;
-    if (FireCooldown > 0.f)
-        return;
-
+    // Only actually shoot if we *still* have a valid target
     FireProjectile();
-    FireCooldown = (FireRate > 0.f) ? (1.f / FireRate) : 0.f;
 }
 
 void AAttackTowerBase::FireProjectile()
 {
-    if (!CurrentTarget.IsValid() || !ProjectileClass)
+    if (!AttackComponent || !ProjectileClass)
         return;
 
-    const FVector SpawnLoc = MuzzlePoint->GetComponentLocation();
-    const FVector TargetLoc = CurrentTarget->GetActorLocation();
+    AActor* Target = AttackComponent->GetCurrentTarget();
+    if (!Target)
+        return;
+
+    const FVector SpawnLoc = MuzzlePoint
+        ? MuzzlePoint->GetComponentLocation()
+        : GetActorLocation();
+
+    const FVector TargetLoc = Target->GetActorLocation();
     const FRotator SpawnRot = (TargetLoc - SpawnLoc).Rotation();
 
     FActorSpawnParameters Params;
@@ -409,7 +399,7 @@ void AAttackTowerBase::FireProjectile()
     if (Projectile)
     {
         Projectile->InitProjectile(
-            CurrentTarget.Get(),
+            Target,
             ProjectileDamage,
             ProjectileSpeed,
             bUseHoming,

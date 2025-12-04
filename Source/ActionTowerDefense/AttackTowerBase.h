@@ -4,12 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "TowerBase.h"
+#include "TowerAttackComponent.h"  
 #include "AttackTowerBase.generated.h"
 
 class USphereComponent;
 class AProjectile;
 class UNiagaraSystem;
 class UNiagaraComponent;
+class UTowerAttackComponent;
 
 UENUM(BlueprintType)
 enum class ETowerOrderState : uint8
@@ -63,11 +65,15 @@ protected:
     float FireCooldown = 0.f;
 
     // First-seen-first-out target queue
-    UPROPERTY()
-    TArray<TWeakObjectPtr<AActor>> EnemyQueue;
+    // Removed as part of refactoring of tower setup
+    // To be deleted on new logic confirmed to work
+    //UPROPERTY()
+    //TArray<TWeakObjectPtr<AActor>> EnemyQueue;
 
-    UPROPERTY()
-    TWeakObjectPtr<AActor> CurrentTarget;
+    // Removed as part of refactoring of tower setup
+    // To be deleted on new logic confirmed to work
+    //UPROPERTY()
+    //TWeakObjectPtr<AActor> CurrentTarget;
 
     // --- Projectile movement ---
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Projectile")
@@ -116,13 +122,16 @@ protected:
     // Internal Tick helpers
     // ================================
     void TickAttack(float DeltaSeconds);
-    void UpdateTargetQueue(float DeltaSeconds);
+    
+    // To do - delete as part of refactoring upon confirmation of new logic works
+    //void UpdateTargetQueue(float DeltaSeconds);
+    //bool HasValidTarget() const;
+    //bool IsEnemyValid(AActor* EnemyActor) const;
+    //void TickFireLogic(float DeltaSeconds);
+    
     void UpdateOrderState(float DeltaSeconds);
     void RotateTowardsTarget(float DeltaSeconds);
-    void TickFireLogic(float DeltaSeconds);
-
-    bool HasValidTarget() const;
-    bool IsEnemyValid(AActor* EnemyActor) const;
+        
     bool IsAimedAtTarget() const;
 
     // Order/state helpers
@@ -149,4 +158,10 @@ public:
 protected:
     // Allow child towers (e.g. Minigun) to customize the actual shot
     virtual void FireProjectile();
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Attack")
+    UTowerAttackComponent* AttackComponent = nullptr;
+
+    UFUNCTION()
+    void HandleAttackReadyToFire();
 };
