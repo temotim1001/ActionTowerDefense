@@ -109,9 +109,10 @@ void AAttackTowerBase::TickAttack(float DeltaSeconds)
 
     const bool bIsAimed = IsAimedAtTarget();
 
+    // Only allow firing in explicit attack modes
     const bool bOrderAllowsFire =
-        (CurrentOrderState != ETowerOrderState::HoldFire) &&
-        (CurrentOrderState != ETowerOrderState::Disabled);
+        (CurrentOrderState == ETowerOrderState::AttackEnemies) ||
+        (CurrentOrderState == ETowerOrderState::AttackBonus);
 
     const bool bCanFireNow = bOrderAllowsFire && bIsAimed;
 
