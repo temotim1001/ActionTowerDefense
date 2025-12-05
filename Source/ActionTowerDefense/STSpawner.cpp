@@ -4,6 +4,7 @@
 #include "STSpawner.h"
 #include "Engine/World.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "STGameState.h"
 #include "STGameSpeedHelpers.h"
 
 ASTSpawner::ASTSpawner()
