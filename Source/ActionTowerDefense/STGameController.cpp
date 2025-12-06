@@ -280,14 +280,6 @@ void ASTGameController::HandleNextWaveScheduled(float TimeUntilNextWave)
     }
 }
 
-/* To Do delete - when new logic is confirmed to be working
-void ASTGameController::HandleEnemySpawned(AActor* SpawnedEnemy)
-{
-    // We don’t care which enemy it is here – just count it.
-    NotifyEnemySpawned();
-}
-*/
-
 void ASTGameController::ApplyReverseScoreCost(float DeltaSeconds)
 {
     if (CurrentSpeed >= 0.f)
