@@ -10,6 +10,7 @@
 #include "EngineUtils.h"
 #include "USTEndGameWidget.h"
 #include "Blueprint/UserWidget.h"
+#include "STEnemyLifeComponent.h"
 
 ASTGameController::ASTGameController()
 {
@@ -42,18 +43,35 @@ void ASTGameController::BeginPlay()
     bPlayerWon = false;
     NumEnemiesAlive = 0;
 
+    if (!SpawnerRef)
+    {
+        if (UWorld* World = GetWorld())
+        {
+            for (TActorIterator<ASTSpawner> It(World); It; ++It)
+            {
+                SpawnerRef = *It;
+                break; // use the first one found
+            }
+        }
+    }
+
     // Bind to spawner events if we have a reference
     if (SpawnerRef)
     {
+        UE_LOG(LogTemp, Log, TEXT("GC: Binding to spawner %s"), *SpawnerRef->GetName());
+
         SpawnerRef->OnWaveStarted.AddDynamic(
             this, &ASTGameController::HandleWaveStarted);
 
         SpawnerRef->OnNextWaveScheduled.AddDynamic(
             this, &ASTGameController::HandleNextWaveScheduled);
 
-        // NEW: update enemies-alive count based on spawner event
         SpawnerRef->OnEnemySpawned.AddDynamic(
             this, &ASTGameController::HandleEnemySpawned);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("GC: No SpawnerRef found in BeginPlay!"));
     }
 
     // Initial HUD values
@@ -262,11 +280,13 @@ void ASTGameController::HandleNextWaveScheduled(float TimeUntilNextWave)
     }
 }
 
+/* To Do delete - when new logic is confirmed to be working
 void ASTGameController::HandleEnemySpawned(AActor* SpawnedEnemy)
 {
     // We don’t care which enemy it is here – just count it.
     NotifyEnemySpawned();
 }
+*/
 
 void ASTGameController::ApplyReverseScoreCost(float DeltaSeconds)
 {
@@ -522,4 +542,43 @@ void ASTGameController::ShowEndGameScreen(bool bInPlayerWon)
 
     // Optional: hard pause
     // UGameplayStatics::SetGamePaused(World, true);
+}
+
+void ASTGameController::HandleEnemySpawned(AActor* SpawnedEnemy)
+{
+    // Count this enemy
+    NotifyEnemySpawned();
+
+    if (!SpawnedEnemy)
+    {
+        return;
+    }
+
+    // Attach to this enemy's lifecycle component if present
+    if (USTEnemyLifeComponent* LifeComp = SpawnedEnemy->FindComponentByClass<USTEnemyLifeComponent>())
+    {
+        UE_LOG(LogTemp, Log,
+            TEXT("GC: Bound to enemy life component on %s"),
+            *SpawnedEnemy->GetName());
+
+        LifeComp->OnEnemyRemoved.AddDynamic(
+            this,
+            &ASTGameController::HandleEnemyRemoved);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("GC: Spawned enemy %s has NO STEnemyLifeComponent"),
+            *SpawnedEnemy->GetName());
+    }
+}
+
+void ASTGameController::HandleEnemyRemoved(AActor* EnemyActor, bool bReachedGoal)
+{
+    UE_LOG(LogTemp, Log,
+        TEXT("GC: HandleEnemyRemoved called for %s, ReachedGoal=%s"),
+        EnemyActor ? *EnemyActor->GetName() : TEXT("nullptr"),
+        bReachedGoal ? TEXT("true") : TEXT("false"));
+
+    NotifyEnemyRemoved(bReachedGoal);
 }

@@ -182,6 +182,9 @@ public:
     UPROPERTY()
     USTEndGameWidget* EndGameWidgetInstance = nullptr;
 
+    UFUNCTION()
+    void HandleEnemyRemoved(AActor* EnemyActor, bool bReachedGoal);
+
 protected:
     /** Internal helper to apply rewind score cost every tick. */
     void ApplyReverseScoreCost(float DeltaSeconds);

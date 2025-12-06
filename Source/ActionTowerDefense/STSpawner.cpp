@@ -6,6 +6,8 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "STGameState.h"
 #include "STGameSpeedHelpers.h"
+#include "EnemyBase.h"
+
 
 ASTSpawner::ASTSpawner()
 {
@@ -230,7 +232,26 @@ AActor* ASTSpawner::SpawnEnemy_Implementation(const FSTSpawnLane& Lane, int32 La
 
     if (Spawned)
     {
-        // NEW: let listeners (GameController, HUD, etc.) react to the spawn
+        if (ASTEnemyBase* Enemy = Cast<ASTEnemyBase>(Spawned))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Spawner: Spawned %s as ASTEnemyBase"),
+                *Enemy->GetName());
+
+            if (Path)
+            {
+                Enemy->SetSplineActor(Path);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Spawner: Path is NULL!"));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Spawner: Spawned %s is NOT ASTEnemyBase"),
+                *Spawned->GetName());
+        }
+
         OnEnemySpawned.Broadcast(Spawned);
 
         if (bLogSpawns)

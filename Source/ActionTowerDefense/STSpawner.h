@@ -66,6 +66,10 @@ public:
     
     virtual void Tick(float DeltaTime) override;
 
+    /** Path actor (e.g. BP_Path) that owns a spline used by enemies. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawner|Config")
+    AActor* Path = nullptr;
+
 protected:
     virtual void BeginPlay() override;
     
