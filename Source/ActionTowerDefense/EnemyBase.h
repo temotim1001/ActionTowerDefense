@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -37,6 +37,9 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Stats")
     float CurrentHealth = 0.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Stats")
+    float BaseScoreValue = 100.f;    // ← NEW: tweak per enemy type in BP
 
     // --- Movement along spline/path ---
     /** Units per second along the spline at 1x game speed. */

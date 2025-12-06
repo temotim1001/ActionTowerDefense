@@ -6,6 +6,7 @@
 #include "Components/SplineComponent.h"
 #include "STEnemyLifeComponent.h"
 #include "STGameSpeedHelpers.h"
+#include "STGameController.h" 
 
 ASTEnemyBase::ASTEnemyBase()
 {
@@ -42,18 +43,13 @@ void ASTEnemyBase::Tick(float DeltaSeconds)
 
     const float Speed = FSTGameSpeedHelpers::GetGameSpeed(this);
 
-    UE_LOG(LogTemp, VeryVerbose,
-        TEXT("Enemy %s Tick: Speed=%.2f, CachedSpline=%s, Distance=%.1f"),
-        *GetName(),
-        Speed,
-        CachedSpline ? TEXT("VALID") : TEXT("NULL"),
-        DistanceAlongSpline);
-
-    if (Speed <= 0.f)
+    // Pause when speed is effectively 0 (0x)
+    if (FMath::IsNearlyZero(Speed))
     {
         return;
     }
 
+    // Scale by game speed (1x, 3x, 5x, -3x, etc.)
     const float EffectiveDelta = DeltaSeconds * Speed;
     UpdateMovement(EffectiveDelta);
 }
@@ -93,10 +89,16 @@ void ASTEnemyBase::UpdateMovement(float DeltaSeconds)
         return;
     }
 
+    // Move forward/backward along the spline depending on sign of DeltaSeconds
     DistanceAlongSpline += MoveSpeed * DeltaSeconds;
 
     const float SplineLength = CachedSpline->GetSplineLength();
-    if (DistanceAlongSpline >= SplineLength)
+
+    // Clamp so we never go below 0 or beyond the spline length
+    DistanceAlongSpline = FMath::Clamp(DistanceAlongSpline, 0.f, SplineLength);
+
+    // If we’ve just reached the end going forward, treat it as a leak.
+    if (DistanceAlongSpline >= SplineLength - KINDA_SMALL_NUMBER)
     {
         HandleReachedGoal();
         return;
@@ -137,11 +139,17 @@ void ASTEnemyBase::KillEnemy(bool bReachedGoal)
 
     if (bReachedGoal)
     {
-        // Let BP react (e.g. play leak VFX)
+        // leaked through to the end – no score
         BP_OnReachedGoal();
     }
     else
     {
+        // killed by towers – award score
+        if (ASTGameController* GC = ASTGameController::Get(this))
+        {
+            GC->AwardScoreForEnemy(BaseScoreValue);
+        }
+
         BP_OnKilled();
     }
 
